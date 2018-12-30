@@ -36,6 +36,35 @@ def get_record_parser(config, is_test=False):
         return context_idxs, ques_idxs, context_char_idxs, ques_char_idxs, y1, y2, qa_id
     return parse
 
+def get_record_parser_SemEval(config, is_test=False):
+    def parse(example):
+        ans_limit = config.test_para_limit if is_test else config.para_limit
+        ques_limit = config.test_ques_limit if is_test else config.ques_limit
+        char_limit = config.char_limit
+        features = tf.parse_single_example(example,
+                                           features={
+                                               "ans_idxs": tf.FixedLenFeature([], tf.string),
+                                               "ques_idxs": tf.FixedLenFeature([], tf.string),
+                                               "ans_char_idxs": tf.FixedLenFeature([], tf.string),
+                                               "ques_char_idxs": tf.FixedLenFeature([], tf.string),
+                                               "y": tf.FixedLenFeature([], tf.string),
+                                               
+                                               "id": tf.FixedLenFeature([], tf.int64)
+                                           })
+        context_idxs = tf.reshape(tf.decode_raw(
+            features["ans_idxs"], tf.int32), [ans_limit])
+        ques_idxs = tf.reshape(tf.decode_raw(
+            features["ques_idxs"], tf.int32), [ques_limit])
+        context_char_idxs = tf.reshape(tf.decode_raw(
+            features["ans_char_idxs"], tf.int32), [ans_limit, char_limit])
+        ques_char_idxs = tf.reshape(tf.decode_raw(
+            features["ques_char_idxs"], tf.int32), [ques_limit, char_limit])
+        y = tf.reshape(tf.decode_raw(
+            features["y"], tf.float32), [1])
+        qa_id = features["id"]
+        return context_idxs, ques_idxs, context_char_idxs, ques_char_idxs, y
+    return parse
+
 
 def get_batch_dataset(record_file, parser, config):
     num_threads = tf.constant(config.num_threads, dtype=tf.int32)
@@ -141,3 +170,88 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
         score = metric_fn(prediction, ground_truth)
         scores_for_ground_truths.append(score)
     return max(scores_for_ground_truths)
+
+
+
+def aggregate_s0(s0, y, ypred, k=None):
+    """
+    Generate tuples (s0, [(y, ypred), ...]) where the list is sorted
+    by the ypred score.  This is useful for a variety of list-based
+    measures in the "anssel"-type tasks.
+    """
+    ybys0 = dict()
+    for i in range(len(s0)):
+        try:
+            s0is = s0[i].tostring()
+        except AttributeError:
+            s0is = str(s0[i])
+        if s0is in ybys0:
+            ybys0[s0is].append((y[i], ypred[i]))
+        else:
+            ybys0[s0is] = [(y[i], ypred[i])]
+
+    for s, yl in ybys0.items():
+        if k is not None:
+            yl = yl[:k]
+        ys = sorted(yl, key=lambda yy: yy[1], reverse=True)
+        yield (s, ys)
+
+
+def mrr(s0, y, ypred):
+    """
+    Compute MRR (mean reciprocial rank) of y-predictions, by grouping
+    y-predictions for the same s0 together.  This metric is relevant
+    e.g. for the "answer sentence selection" task where we want to
+    identify and take top N most relevant sentences.
+    """
+    rr = []
+    for s, ys in aggregate_s0(s0, y, ypred):
+        if np.sum([yy[0] for yy in ys]) == 0:
+            continue  # do not include s0 with no right answers in MRR
+        ysd = dict()
+        for yy in ys:
+            if yy[1][0] in ysd:
+                ysd[yy[1][0]].append(yy[0])
+            else:
+                ysd[yy[1][0]] = [yy[0]]
+        rank = 0
+        for yp in sorted(ysd.keys(), reverse=True):
+            if np.sum(ysd[yp]) > 0:
+                rankofs = 1 - np.sum(ysd[yp]) / len(ysd[yp])
+                rank += len(ysd[yp]) * rankofs
+                break
+            rank += len(ysd[yp])
+        rr.append(1 / float(1 + rank))
+    return np.mean(rr)
+
+
+def map_(s0, y, ypred):
+    MAP = []
+    for s, ys in aggregate_s0(s0, y, ypred):
+        candidates = ys
+        avg_prec = 0
+        precisions = []
+        num_correct = 0
+        for i in range(len(candidates)):
+            if candidates[i][0] == 1:
+                num_correct += 1
+                precisions.append(num_correct / (i + 1))
+        if len(precisions):
+            avg_prec = sum(precisions) / len(precisions)
+        MAP.append(avg_prec)
+    return np.mean(MAP)
+
+class AnsSelCB():
+    """ A callback that monitors answer selection validation ACC after each epoch """
+
+    def __init__(self, val_q, y, inputs):
+        self.val_q = val_q
+        self.val_y = y
+        self.val_inputs = inputs
+
+    def on_epoch_end(self, pred):
+        logs={}
+        mrr_ = mrr(self.val_q, self.val_y, pred)
+        map__ = map_(self.val_q, self.val_y, pred)
+        # print('val MRR %f; MAP: %f' % (mrr_, map__))
+        return {"map": map__, "mrr": mrr_}

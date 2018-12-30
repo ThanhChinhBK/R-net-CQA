@@ -205,3 +205,11 @@ def dense(inputs, hidden, use_bias=True, scope="dense"):
             res = tf.nn.bias_add(res, b)
         res = tf.reshape(res, out_shape)
         return res
+
+
+def maxpooling_classifier(inputs, num_class=1, act=tf.nn.sigmoid, scope="maxpooling_classifier"):
+    W = tf.get_variable("Wc", [inputs.get_shape().as_list()[-1], num_class])
+    b = tf.get_variable(
+        "bc", [num_class], initializer=tf.constant_initializer(0.))
+    res = tf.add(tf.matmul(tf.reduce_max(inputs,2), W), b)
+    return res

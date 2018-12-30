@@ -2,7 +2,8 @@ import os
 import tensorflow as tf
 
 from prepro import prepro
-from main import train, test
+from preproSemEval import preproSemEval
+from main import train, test, train_SemEval
 
 flags = tf.flags
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -11,7 +12,7 @@ home = os.path.expanduser("~")
 train_file = os.path.join(home, "data", "squad", "train-v1.1.json")
 dev_file = os.path.join(home, "data", "squad", "dev-v1.1.json")
 test_file = os.path.join(home, "data", "squad", "dev-v1.1.json")
-glove_word_file = os.path.join(home, "data", "glove", "glove.840B.300d.txt")
+glove_word_file =  "glove.6B.50d.txt"
 
 target_dir = "data"
 log_dir = "log/event"
@@ -30,6 +31,7 @@ test_meta = os.path.join(target_dir, "test_meta.json")
 word2idx_file = os.path.join(target_dir, "word2idx.json")
 char2idx_file = os.path.join(target_dir, "char2idx.json")
 answer_file = os.path.join(answer_dir, "answer.json")
+data = "SQUAD" # "SemEval"
 
 if not os.path.exists(target_dir):
     os.makedirs(target_dir)
@@ -41,6 +43,7 @@ if not os.path.exists(answer_dir):
     os.makedirs(answer_dir)
 
 flags.DEFINE_string("mode", "train", "train/debug/test")
+flags.DEFINE_string("data", "SemEval", "SemEval/SQUAD")
 
 flags.DEFINE_string("target_dir", target_dir, "")
 flags.DEFINE_string("log_dir", log_dir, "")
@@ -48,6 +51,9 @@ flags.DEFINE_string("save_dir", save_dir, "")
 flags.DEFINE_string("train_file", train_file, "")
 flags.DEFINE_string("dev_file", dev_file, "")
 flags.DEFINE_string("test_file", test_file, "")
+flags.DEFINE_string("SemEval_train_file", "SemEval/train.txt", "")
+flags.DEFINE_string("SemEval_dev_file", "SemEval/dev.txt", "")
+flags.DEFINE_string("SemEval_test_file", "SemEval/test.txt", "")
 flags.DEFINE_string("glove_word_file", glove_word_file, "")
 
 flags.DEFINE_string("train_record_file", train_record_file, "")
@@ -67,12 +73,12 @@ flags.DEFINE_string("answer_file", answer_file, "")
 
 flags.DEFINE_integer("glove_char_size", 94, "Corpus size for Glove")
 flags.DEFINE_integer("glove_word_size", int(2.2e6), "Corpus size for Glove")
-flags.DEFINE_integer("glove_dim", 300, "Embedding dimension for Glove")
+flags.DEFINE_integer("glove_dim", 50, "Embedding dimension for Glove")
 flags.DEFINE_integer("char_dim", 8, "Embedding dimension for char")
 
-flags.DEFINE_integer("para_limit", 400, "Limit length for paragraph")
-flags.DEFINE_integer("ques_limit", 50, "Limit length for question")
-flags.DEFINE_integer("test_para_limit", 1000,
+flags.DEFINE_integer("para_limit", 150, "Limit length for paragraph")
+flags.DEFINE_integer("ques_limit", 150, "Limit length for question")
+flags.DEFINE_integer("test_para_limit", 150,
                      "Max length for paragraph in test")
 flags.DEFINE_integer("test_ques_limit", 100, "Max length of questions in test")
 flags.DEFINE_integer("char_limit", 16, "Limit length for character")
@@ -116,13 +122,19 @@ def main(_):
     if config.mode == "train":
         train(config)
     elif config.mode == "prepro":
-        prepro(config)
+        if config.data == "SQUAD":
+            prepro(config)
+        elif config.data == "SemEval":
+            preproSemEval(config)
     elif config.mode == "debug":
         config.num_steps = 2
         config.val_num_batches = 1
         config.checkpoint = 1
         config.period = 1
-        train(config)
+        if config.data == "SQUAD":
+            train(config)
+        else:
+            train_SemEval(config)
     elif config.mode == "test":
         test(config)
     else:
