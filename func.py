@@ -211,5 +211,5 @@ def maxpooling_classifier(inputs, num_class=1, act=tf.nn.sigmoid, scope="maxpool
     W = tf.get_variable("Wc", [inputs.get_shape().as_list()[-1], num_class])
     b = tf.get_variable(
         "bc", [num_class], initializer=tf.constant_initializer(0.))
-    res = tf.add(tf.matmul(tf.reduce_max(inputs,2), W), b)
+    res = tf.add(tf.matmul(tf.reduce_max(inputs,1), W), b)
     return res

@@ -28,7 +28,7 @@ def convert_idx(text, tokens):
     return spans
 
 
-def process_file(filename, data_type, word_counter, char_counter):
+def process_file(filename, data_type, word_counter, char_counter, shuffle=False):
     print("Generating {} examples...".format(data_type))
     examples = []
     eval_examples = {}
@@ -55,7 +55,8 @@ def process_file(filename, data_type, word_counter, char_counter):
                        "ques_chars": ques_chars, "y":label, "id": total}
                     
             examples.append(example)
-        random.shuffle(examples)
+        if random:
+            random.shuffle(examples)
         print("{} questions in total".format(len(examples)))
     return examples
 
@@ -114,8 +115,8 @@ def build_features_SemEval(config, examples, data_type, out_file, word2idx_dict,
     for example in tqdm(examples):
         total_ += 1
 
-        if filter_func(example, is_test):
-            continue
+        #if filter_func(example, is_test):
+        #    continue
 
         total += 1
         context_idxs = np.zeros([ans_limit], dtype=np.int32)
@@ -136,33 +137,33 @@ def build_features_SemEval(config, examples, data_type, out_file, word2idx_dict,
                 return char2idx_dict[char]
             return 1
 
-        for i, token in enumerate(example["ans_tokens"]):
+        for i, token in enumerate(example["ans_tokens"][:ans_limit]):
             context_idxs[i] = _get_word(token)
 
-        for i, token in enumerate(example["ques_tokens"]):
+        for i, token in enumerate(example["ques_tokens"][:ques_limit]):
             ques_idxs[i] = _get_word(token)
 
-        for i, token in enumerate(example["ans_chars"]):
+        for i, token in enumerate(example["ans_chars"][:ans_limit]):
             for j, char in enumerate(token):
                 if j == char_limit:
                     break
                 context_char_idxs[i, j] = _get_char(char)
 
-        for i, token in enumerate(example["ques_chars"]):
+        for i, token in enumerate(example["ques_chars"][:ques_limit]):
             for j, char in enumerate(token):
                 if j == char_limit:
                     break
                 ques_char_idxs[i, j] = _get_char(char)
 
         label  = example["y"]
-        y = int(label)
+        y = float(label)
 
         record = tf.train.Example(features=tf.train.Features(feature={
             "ans_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[context_idxs.tostring()])),
             "ques_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[ques_idxs.tostring()])),
             "ans_char_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[context_char_idxs.tostring()])),
             "ques_char_idxs": tf.train.Feature(bytes_list=tf.train.BytesList(value=[ques_char_idxs.tostring()])),
-            "y": tf.train.Feature(bytes_list=tf.train.BytesList(value=[str(y).encode()])),
+            "y": tf.train.Feature(bytes_list=tf.train.BytesList(value=[np.array([y]).tostring()])),
             "id": tf.train.Feature(int64_list=tf.train.Int64List(value=[example["id"]]))
         }))
         writer.write(record.SerializeToString())
@@ -182,7 +183,7 @@ def save(filename, obj, message=None):
 def preproSemEval(config):
     word_counter, char_counter = Counter(), Counter()
     train_examples = process_file(
-        config.SemEval_train_file, "train", word_counter, char_counter)
+        config.SemEval_train_file, "train", word_counter, char_counter, shuffle=True)
     dev_examples = process_file(
         config.SemEval_dev_file, "dev", word_counter, char_counter)
     test_examples = process_file(
@@ -220,4 +221,4 @@ def preproSemEval(config):
     save(config.word2idx_file, word2idx_dict, message="word2idx")
     save(config.char2idx_file, char2idx_dict, message="char2idx")
     save(config.test_meta, test_meta, message="test meta")
-    save("data/test.json", test_examples, message="test example") 
+    save("data/test.json", dev_examples, message="test example") 

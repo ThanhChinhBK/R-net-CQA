@@ -12,7 +12,7 @@ home = os.path.expanduser("~")
 train_file = os.path.join(home, "data", "squad", "train-v1.1.json")
 dev_file = os.path.join(home, "data", "squad", "dev-v1.1.json")
 test_file = os.path.join(home, "data", "squad", "dev-v1.1.json")
-glove_word_file =  "glove.6B.50d.txt"
+glove_word_file =  "glove.6B.300d.txt"
 
 target_dir = "data"
 log_dir = "log/event"
@@ -52,8 +52,8 @@ flags.DEFINE_string("train_file", train_file, "")
 flags.DEFINE_string("dev_file", dev_file, "")
 flags.DEFINE_string("test_file", test_file, "")
 flags.DEFINE_string("SemEval_train_file", "SemEval/train.txt", "")
-flags.DEFINE_string("SemEval_dev_file", "SemEval/dev.txt", "")
-flags.DEFINE_string("SemEval_test_file", "SemEval/test.txt", "")
+flags.DEFINE_string("SemEval_dev_file", "SemEval/test.txt", "")
+flags.DEFINE_string("SemEval_test_file", "SemEval/dev.txt", "")
 flags.DEFINE_string("glove_word_file", glove_word_file, "")
 
 flags.DEFINE_string("train_record_file", train_record_file, "")
@@ -73,14 +73,14 @@ flags.DEFINE_string("answer_file", answer_file, "")
 
 flags.DEFINE_integer("glove_char_size", 94, "Corpus size for Glove")
 flags.DEFINE_integer("glove_word_size", int(2.2e6), "Corpus size for Glove")
-flags.DEFINE_integer("glove_dim", 50, "Embedding dimension for Glove")
+flags.DEFINE_integer("glove_dim", 300, "Embedding dimension for Glove")
 flags.DEFINE_integer("char_dim", 8, "Embedding dimension for char")
 
 flags.DEFINE_integer("para_limit", 150, "Limit length for paragraph")
 flags.DEFINE_integer("ques_limit", 150, "Limit length for question")
 flags.DEFINE_integer("test_para_limit", 150,
                      "Max length for paragraph in test")
-flags.DEFINE_integer("test_ques_limit", 100, "Max length of questions in test")
+flags.DEFINE_integer("test_ques_limit", 150, "Max length of questions in test")
 flags.DEFINE_integer("char_limit", 16, "Limit length for character")
 flags.DEFINE_integer("word_count_limit", -1, "Min count for word")
 flags.DEFINE_integer("char_count_limit", -1, "Min count for char")
@@ -93,7 +93,7 @@ flags.DEFINE_list("bucket_range", [40, 361, 40], "range of bucket")
 
 flags.DEFINE_integer("batch_size", 64, "Batch size")
 flags.DEFINE_integer("num_steps", 60000, "Number of steps")
-flags.DEFINE_integer("checkpoint", 1000, "checkpoint for evaluation")
+flags.DEFINE_integer("checkpoint", 500, "checkpoint for evaluation")
 flags.DEFINE_integer("period", 100, "period to save batch loss")
 flags.DEFINE_integer("val_num_batches", 150, "Num of batches for evaluation")
 flags.DEFINE_float("init_lr", 0.5, "Initial lr for Adadelta")
@@ -120,7 +120,10 @@ flags.DEFINE_boolean("fasttext", False, "Whether to use fasttext")
 def main(_):
     config = flags.FLAGS
     if config.mode == "train":
-        train(config)
+        if config.data == "SQUAD":
+            train(config)
+        else:
+            train_SemEval(config)
     elif config.mode == "prepro":
         if config.data == "SQUAD":
             prepro(config)

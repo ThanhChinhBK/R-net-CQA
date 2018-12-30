@@ -47,8 +47,7 @@ def get_record_parser_SemEval(config, is_test=False):
                                                "ques_idxs": tf.FixedLenFeature([], tf.string),
                                                "ans_char_idxs": tf.FixedLenFeature([], tf.string),
                                                "ques_char_idxs": tf.FixedLenFeature([], tf.string),
-                                               "y": tf.FixedLenFeature([], tf.string),
-                                               
+                                               "y": tf.FixedLenFeature([], tf.string),                                               
                                                "id": tf.FixedLenFeature([], tf.int64)
                                            })
         context_idxs = tf.reshape(tf.decode_raw(
@@ -60,9 +59,9 @@ def get_record_parser_SemEval(config, is_test=False):
         ques_char_idxs = tf.reshape(tf.decode_raw(
             features["ques_char_idxs"], tf.int32), [ques_limit, char_limit])
         y = tf.reshape(tf.decode_raw(
-            features["y"], tf.float32), [1])
+            features["y"], tf.float64), [1])
         qa_id = features["id"]
-        return context_idxs, ques_idxs, context_char_idxs, ques_char_idxs, y
+        return context_idxs, ques_idxs, context_char_idxs, ques_char_idxs, y, qa_id
     return parse
 
 
@@ -244,14 +243,13 @@ def map_(s0, y, ypred):
 class AnsSelCB():
     """ A callback that monitors answer selection validation ACC after each epoch """
 
-    def __init__(self, val_q, y, inputs):
+    def __init__(self, val_q, y):
         self.val_q = val_q
         self.val_y = y
-        self.val_inputs = inputs
 
     def on_epoch_end(self, pred):
         logs={}
         mrr_ = mrr(self.val_q, self.val_y, pred)
         map__ = map_(self.val_q, self.val_y, pred)
-        # print('val MRR %f; MAP: %f' % (mrr_, map__))
+        print('val MRR %f; MAP: %f' % (mrr_, map__))
         return {"map": map__, "mrr": mrr_}

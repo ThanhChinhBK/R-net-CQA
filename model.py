@@ -11,7 +11,8 @@ class Model(object):
         if self.config.data == "SQUAD":
             self.c, self.q, self.ch, self.qh, self.y1, self.y2, self.qa_id = batch.get_next()
         elif self.config.data == "SemEval":
-            self.c, self.q, self.ch, self.qh, self.y  = batch.get_next()
+            self.c, self.q, self.ch, self.qh, self.y, self.qa_id  = batch.get_next()
+            
         self.is_train = tf.get_variable(
             "is_train", shape=[], dtype=tf.bool, trainable=False)
         self.word_mat = tf.get_variable("word_mat", initializer=tf.constant(
@@ -37,8 +38,7 @@ class Model(object):
             if self.config.data == "SQUAD":
                 self.y1 = tf.slice(self.y1, [0, 0], [N, self.c_maxlen])
                 self.y2 = tf.slice(self.y2, [0, 0], [N, self.c_maxlen])
-            elif self.config.data == "SemEval":
-                self.y = tf.slice(self.y, [0, 0], [N, self.c_maxlen])
+            
         else:
             self.c_maxlen, self.q_maxlen = config.para_limit, config.ques_limit
 
@@ -138,8 +138,9 @@ class Model(object):
             with tf.variable_scope("predict"):
                 output = maxpooling_classifier(match)
                 self.yp = tf.nn.sigmoid(output)
+                print(self.y.get_shape())
                 self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-                    labels=self.y, logits=output))
+                    labels=tf.cast(self.y, tf.float32), logits=output))
             
 
     def get_loss(self):

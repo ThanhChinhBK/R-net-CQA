@@ -15,6 +15,12 @@ def train_SemEval(config):
         char_mat = np.array(json.load(fh), dtype=np.float32)
     with open(config.dev_meta, "r") as fh:
         meta = json.load(fh)
+    with open("data/test.json", "r") as fh:
+        t = json.load(fh)
+        q = [x["ques_tokens"] for x in t]
+        y = [x["y"] for x in t]
+        cb = AnsSelCB(q, y)
+        
         
     dev_total = meta["total"]
 
@@ -56,14 +62,14 @@ def train_SemEval(config):
                 writer.add_summary(loss_sum, global_step)
             if global_step % config.checkpoint == 0:
                 metrics, summ = evaluate_batch_SemEval(
-                    model, dev_total // config.batch_size + 1, dev_eval_file, sess, "dev", handle, dev_handle)
+                    model, dev_total // config.batch_size + 1, sess, "dev", handle, dev_handle, cb)
                 sess.run(tf.assign(model.is_train,
                                    tf.constant(True, dtype=tf.bool)))
 
                 dev_map = metrics["map"]
                 print("dev map now %.6f while best map is %.6f" %(dev_map, map_save))
                 if dev_map > map_save:
-                    loss_map = dev_map
+                    map_save = dev_map
                     patience = 0
                 else:
                     patience += 1
@@ -79,16 +85,20 @@ def train_SemEval(config):
                 saver.save(sess, filename)
 
                 
-def evaluate_batch_SemEval(model, num_batches, sess, data_type, handle, str_handle):
+def evaluate_batch_SemEval(model, num_batches, sess, data_type, handle, str_handle, cb):
     answer_dict = {}
     losses = []
+    total_yp = {}
     for _ in tqdm(range(1, num_batches + 1)):
-        q, loss, y,yp = sess.run(
-            [model.q, model.loss, model.y, model.yp], feed_dict={handle: str_handle})
-        cb = AnsSelCB(q_id.tolist(), y.tolist())
+        qa_id, loss, y, yp = sess.run(
+            [model.qa_id, model.loss, model.y, model.yp], feed_dict={handle: str_handle})
+        for i, yp_ in zip(qa_id, yp):
+            if i not in total_yp:
+                total_yp[i] = yp_
         losses.append(loss)
+    print(y.shape)
     loss = np.mean(losses)
-    metrics = cb.on_epoch_end(yp)
+    metrics = cb.on_epoch_end(list(total_yp.values()))
     metrics["loss"] = loss
     loss_sum = tf.Summary(value=[tf.Summary.Value(
         tag="{}/loss".format(data_type), simple_value=metrics["loss"]), ])
